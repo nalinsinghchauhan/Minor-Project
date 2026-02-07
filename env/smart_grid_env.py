@@ -2,25 +2,18 @@ import numpy as np
 
 
 class SmartGridEnv:
-    def __init__(
-        self,
-        num_houses=5,
-        episode_length=24,
-        transformer_capacity=15.0,
-        fixed_load_range=(0.5, 1.5),
-        variable_load_range=(0.0, 4.0),
-        solar_houses=None,
-        max_solar_generation=3.0
-    ):
-        self.num_houses = num_houses
-        self.episode_length = episode_length
-        self.transformer_capacity = transformer_capacity
+    def __init__(self, config):
+        self.num_houses = config.NUM_HOUSES
+        self.episode_length = config.EPISODE_LENGTH
+        self.transformer_capacity = config.TRANSFORMER_CAPACITY
 
-        self.fixed_load_range = fixed_load_range
-        self.variable_load_range = variable_load_range
+        self.fixed_load_range = config.FIXED_LOAD_RANGE
+        self.variable_load_range = config.VARIABLE_LOAD_RANGE
 
-        self.solar_houses = solar_houses or []
-        self.max_solar_generation = max_solar_generation
+        self.solar_houses = config.SOLAR_HOUSES
+        self.max_solar_generation = config.MAX_SOLAR_GENERATION
+
+        self.overload_penalty = config.OVERLOAD_PENALTY
 
         self.current_step = 0
 
@@ -34,34 +27,29 @@ class SmartGridEnv:
     def reset(self):
         self.current_step = 0
 
-        # Fixed load (same every timestep)
         self.fixed_load = np.random.uniform(
             self.fixed_load_range[0],
             self.fixed_load_range[1],
             self.num_houses
         )
 
-        self._generate_variable_and_solar()
+        self._update_demand()
         return self._get_state()
 
-    def _generate_variable_and_solar(self):
-        # Variable load (changes every timestep)
+    def _update_demand(self):
         self.variable_load = np.random.uniform(
             self.variable_load_range[0],
             self.variable_load_range[1],
             self.num_houses
         )
 
-        # Solar generation
         self.solar_generation = np.zeros(self.num_houses)
-
         for i in self.solar_houses:
             self.solar_generation[i] = np.random.uniform(
                 0.0,
                 self.max_solar_generation
             )
 
-        # Net demand cannot be negative
         self.net_demand = np.maximum(
             self.fixed_load + self.variable_load - self.solar_generation,
             0.0
@@ -75,12 +63,15 @@ class SmartGridEnv:
 
         overload = max(0.0, total_load - self.transformer_capacity)
 
-        reward = np.sum(actual_load) - 2.0 * overload
+        reward = (
+            np.sum(actual_load)
+            - self.overload_penalty * overload
+        )
 
         self.current_step += 1
         done = self.current_step >= self.episode_length
 
-        self._generate_variable_and_solar()
+        self._update_demand()
 
         info = {
             "total_load": total_load,

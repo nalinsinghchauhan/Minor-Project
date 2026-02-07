@@ -27,22 +27,27 @@ class SmartGridEnv:
     def reset(self):
         self.current_step = 0
 
+        # Fixed load remains constant for the whole episode
         self.fixed_load = np.random.uniform(
             self.fixed_load_range[0],
             self.fixed_load_range[1],
             self.num_houses
         )
 
+        # Generate demand for the first timestep
         self._update_demand()
+
         return self._get_state()
 
     def _update_demand(self):
+        # Variable load changes every timestep
         self.variable_load = np.random.uniform(
             self.variable_load_range[0],
             self.variable_load_range[1],
             self.num_houses
         )
 
+        # Solar generation
         self.solar_generation = np.zeros(self.num_houses)
         for i in self.solar_houses:
             self.solar_generation[i] = np.random.uniform(
@@ -50,12 +55,16 @@ class SmartGridEnv:
                 self.max_solar_generation
             )
 
+        # Net demand cannot be negative
         self.net_demand = np.maximum(
             self.fixed_load + self.variable_load - self.solar_generation,
             0.0
         )
 
     def step(self, actions):
+        # Update demand for THIS timestep
+        self._update_demand()
+
         actions = np.clip(actions, 0.0, 1.0)
 
         actual_load = actions * self.net_demand
@@ -70,8 +79,6 @@ class SmartGridEnv:
 
         self.current_step += 1
         done = self.current_step >= self.episode_length
-
-        self._update_demand()
 
         info = {
             "total_load": total_load,
